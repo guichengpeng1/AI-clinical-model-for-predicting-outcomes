@@ -1,0 +1,19 @@
+[Unit]
+Description=AI Clinical Score Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/media/ubuntu/CosMx/rc_pc/20250824
+Environment=HOST=127.0.0.1
+Environment=PORT=8080
+ExecStart=/media/ubuntu/CosMx/rc_pc/20250824/deploy/start_ai_clinical_score_web.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:/media/ubuntu/CosMx/rc_pc/20250824/logs/webapp.log
+StandardError=append:/media/ubuntu/CosMx/rc_pc/20250824/logs/webapp.log
+
+[Install]
+WantedBy=multi-user.target

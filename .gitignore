@@ -1,0 +1,57 @@
+.DS_Store
+._*
+.~*
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+
+# Raw data and large local research assets
+AIdata/
+big size/
+clinical.cohort.2025-04-23/
+forest plot/
+independent/
+manuscripts.versions/
+notused/
+11.uniCox/
+
+# Large binary source materials not needed for code review / GitHub hosting
+*.xlsx
+*.xls
+*.pdf
+*.ai
+*.pptx
+*.doc
+*.docx
+
+# Keep selected manuscript docs
+!manuscript.20251005.docx
+!manuscript.20251005.sq9model.docx
+
+# Keep manuscript sources in docx, but ignore office temp files
+~*.docx
+
+# Generated outputs
+outputs/
+!outputs/
+outputs/*
+!outputs/model_comparison/
+!outputs/model_comparison/seer_model_metrics_unified.csv
+!outputs/manuscript_survivalquilts/
+outputs/manuscript_survivalquilts/*
+!outputs/manuscript_survivalquilts/manuscript_survivalquilts_bundle.joblib
+!outputs/manuscript_survivalquilts/manuscript_survivalquilts_metrics.csv
+!outputs/manuscript_survivalquilts/manuscript_survivalquilts_summary.json
+!outputs/manuscript_survivalquilts/manuscript_survivalquilts_weights.csv
+!outputs/manuscript_survivalquilts/python_base_models/
+outputs/manuscript_survivalquilts/python_base_models/*
+!outputs/manuscript_survivalquilts/python_base_models/best_model.joblib
+!outputs/manuscript_survivalquilts/python_base_models/seer_model_metrics.csv
+!outputs/manuscript_survivalquilts/python_base_models/seer_training_summary.json
+!outputs/manuscript_survivalquilts/r_base_models/
+outputs/manuscript_survivalquilts/r_base_models/*
+!outputs/manuscript_survivalquilts/r_base_models/r_model_metrics.csv
+
+# Vendored exploratory mirror; keep the adapted scripts instead
+external/

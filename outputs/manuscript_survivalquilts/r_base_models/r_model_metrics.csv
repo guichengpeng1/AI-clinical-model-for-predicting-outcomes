@@ -1,0 +1,3 @@
+"model","val_harrell_cindex","test_harrell_cindex","threshold"
+"superpc_r",NA,NA,14.0550758249504
+"conditional_inference_survival_forest_r",NA,NA,NA
