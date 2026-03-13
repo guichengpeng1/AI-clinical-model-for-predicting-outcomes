@@ -545,6 +545,17 @@ def fit_and_evaluate(df, output_dir, source_path, model_names=None, split_manife
         json.dump(summary, fh, indent=2)
     joblib.dump(
         {
+            "models": fitted,
+            "predictors": PREDICTOR_COLUMNS,
+            "time_column": TIME_COLUMN,
+            "event_column": EVENT_COLUMN,
+            "horizons": HORIZONS,
+            "random_state": RANDOM_STATE,
+        },
+        output_dir / "python_models.joblib",
+    )
+    joblib.dump(
+        {
             "model": best_model,
             "best_model_name": best_name,
             "predictors": PREDICTOR_COLUMNS,

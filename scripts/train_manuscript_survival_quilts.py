@@ -253,8 +253,22 @@ def weights_table(weights_by_horizon, val_scores):
     return pd.DataFrame(rows)
 
 
+def collect_raw_normalization(train_df):
+    normalization = {}
+    for model_name in MANUSCRIPT_MODELS:
+        horizon_col = f"risk_{model_name}_{int(HORIZONS[0])}"
+        raw_col = f"risk_{model_name}"
+        if horizon_col not in train_df.columns and raw_col in train_df.columns:
+            values = train_df[raw_col].to_numpy(dtype=float)
+            normalization[model_name] = {
+                "min": float(np.nanmin(values)),
+                "max": float(np.nanmax(values)),
+            }
+    return normalization
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Train manuscript-aligned Survival Quilts over 9 base models.")
+    parser = argparse.ArgumentParser(description="Train manuscript-aligned Survival Quilts over 11 base models.")
     parser.add_argument("--input", default="AIdata/SEER.csv")
     parser.add_argument("--output-dir", default="outputs/manuscript_survivalquilts")
     parser.add_argument("--sample-n", type=int, default=0)
@@ -343,6 +357,7 @@ def main():
         ]
     )
     weights_df = weights_table(weights_by_horizon, val_scores)
+    raw_normalization = collect_raw_normalization(train_df)
 
     summary = {
         "input": str(args.input),
@@ -371,12 +386,18 @@ def main():
         json.dump(summary, fh, indent=2)
     joblib.dump(
         {
+            "bundle_type": "manuscript_survivalquilts_ensemble",
             "weights_by_horizon": weights_by_horizon,
             "models": MANUSCRIPT_MODELS,
+            "predictors": PREDICTOR_COLUMNS,
             "horizons": [int(h) for h in HORIZONS],
+            "ensemble_method": str(args.ensemble_method),
+            "raw_normalization": raw_normalization,
             "split_manifest": str(split_manifest_path),
             "python_base_dir": str(python_out_dir),
+            "python_models_path": str(python_out_dir / "python_models.joblib"),
             "r_base_dir": str(r_out_dir),
+            "r_prediction_script": str(Path(__file__).resolve().parents[1] / "scripts" / "predict_r_survival_models.R"),
         },
         output_dir / "manuscript_survivalquilts_bundle.joblib",
     )

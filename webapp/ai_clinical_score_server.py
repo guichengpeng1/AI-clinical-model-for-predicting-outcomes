@@ -2,13 +2,22 @@
 import argparse
 import html
 import json
+import subprocess
+import sys
+import tempfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import joblib
+import numpy as np
 import pandas as pd
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 FIELD_SPECS = [
@@ -70,9 +79,113 @@ FIELD_SPECS = [
 ]
 
 
+R_SCRIPT = Path("/home/ubuntu/miniconda3/envs/r4.3/bin/Rscript")
+
+
+class SingleModelPredictor:
+    def __init__(self, bundle):
+        self.bundle = bundle
+        self.model_name = bundle["best_model_name"]
+
+    def predict(self, df):
+        model = self.bundle["model"]
+        raw_risk = float(model.predict(df)[0])
+        horizon_risks = {}
+        if hasattr(model, "predict_survival_function"):
+            fn = model.predict_survival_function(df)[0]
+            for horizon in self.bundle["horizons"]:
+                horizon_risks[f"{int(horizon)}-month risk"] = 1.0 - float(fn(horizon))
+        return {
+            "raw_risk": raw_risk,
+            "raw_label": "Raw risk score",
+            "horizon_risks": horizon_risks,
+            "model_name": self.model_name,
+        }
+
+
+class EnsembleModelPredictor:
+    def __init__(self, bundle):
+        self.bundle = bundle
+        self.model_name = f"11-model super learner ensemble ({bundle.get('ensemble_method', 'ensemble')})"
+        python_blob = joblib.load(bundle["python_models_path"])
+        self.python_models = python_blob["models"]
+        self.models = list(bundle["models"])
+        self.horizons = [int(h) for h in bundle["horizons"]]
+        self.weights_by_horizon = {int(k): np.asarray(v, dtype=float) for k, v in bundle["weights_by_horizon"].items()}
+        self.raw_normalization = bundle.get("raw_normalization", {})
+        self.r_base_dir = Path(bundle["r_base_dir"])
+        self.r_prediction_script = Path(bundle["r_prediction_script"])
+
+    def _normalize_raw(self, model_name, values):
+        stats = self.raw_normalization.get(model_name)
+        if not stats:
+            return np.full(len(values), 0.5, dtype=float)
+        lo = float(stats["min"])
+        hi = float(stats["max"])
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi - lo < 1e-12:
+            return np.full(len(values), 0.5, dtype=float)
+        scaled = (np.asarray(values, dtype=float) - lo) / (hi - lo)
+        return np.clip(scaled, 0.0, 1.0)
+
+    def _predict_python_models(self, df):
+        out = {}
+        for model_name, model in self.python_models.items():
+            if hasattr(model, "predict_survival_function"):
+                fn = model.predict_survival_function(df)[0]
+                for horizon in self.horizons:
+                    out[(model_name, horizon)] = 1.0 - float(fn(horizon))
+            else:
+                raw = np.asarray(model.predict(df), dtype=float)
+                scaled = self._normalize_raw(model_name, raw)
+                value = float(scaled[0])
+                for horizon in self.horizons:
+                    out[(model_name, horizon)] = value
+        return out
+
+    def _predict_r_models(self, df):
+        with tempfile.TemporaryDirectory(prefix="ai_clinical_score_r_") as tmp_dir:
+            tmp_dir = Path(tmp_dir)
+            input_csv = tmp_dir / "input.csv"
+            output_csv = tmp_dir / "output.csv"
+            df.to_csv(input_csv, index=False)
+            subprocess.run(
+                [str(R_SCRIPT), str(self.r_prediction_script), str(self.r_base_dir), str(input_csv), str(output_csv)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            pred = pd.read_csv(output_csv)
+
+        out = {}
+        for horizon in self.horizons:
+            out[("superpc_r", horizon)] = float(pred.loc[0, f"superpc_risk_{horizon}"])
+            out[("conditional_inference_survival_forest_r", horizon)] = float(pred.loc[0, f"cforest_risk_{horizon}"])
+        return out
+
+    def predict(self, df):
+        feature_map = {}
+        feature_map.update(self._predict_python_models(df))
+        feature_map.update(self._predict_r_models(df))
+
+        horizon_risks = {}
+        for horizon in self.horizons:
+            weights = self.weights_by_horizon[horizon]
+            values = np.asarray([feature_map[(model_name, horizon)] for model_name in self.models], dtype=float)
+            horizon_risks[f"{horizon}-month risk"] = float(np.dot(values, weights))
+
+        return {
+            "raw_risk": horizon_risks.get("60-month risk", next(iter(horizon_risks.values()))),
+            "raw_label": "Primary 60-month risk",
+            "horizon_risks": horizon_risks,
+            "model_name": self.model_name,
+        }
+
+
 def load_bundle(path):
     bundle = joblib.load(path)
-    return bundle
+    if isinstance(bundle, dict) and bundle.get("bundle_type") == "manuscript_survivalquilts_ensemble":
+        return EnsembleModelPredictor(bundle)
+    return SingleModelPredictor(bundle)
 
 
 def render_form(values, prediction, model_status):
@@ -119,7 +232,7 @@ def render_form(values, prediction, model_status):
         <section class="results">
             <h2>Prediction</h2>
             <div class="hero-metric">
-                <div class="metric-label">Raw risk score</div>
+                <div class="metric-label">{html.escape(prediction['raw_label'])}</div>
                 <div class="hero-value">{prediction['raw_risk']:.4f}</div>
             </div>
             <div class="metrics-grid">
@@ -311,7 +424,7 @@ class AppHandler(BaseHTTPRequestHandler):
     def _model_status(self):
         if self.bundle is None:
             return f"Model bundle not found at {self.bundle_path}. Train the model first."
-        return f"Loaded model bundle: {self.bundle['best_model_name']}"
+        return f"Loaded model bundle: {self.bundle.model_name}"
 
     def _send_html(self, content, status=HTTPStatus.OK):
         self.send_response(status)
@@ -341,18 +454,7 @@ class AppHandler(BaseHTTPRequestHandler):
         if self.bundle is None:
             raise RuntimeError("model bundle is not loaded")
         df = pd.DataFrame([row])
-        model = self.bundle["model"]
-        raw_risk = float(model.predict(df)[0])
-        horizon_risks = {}
-        if hasattr(model, "predict_survival_function"):
-            fn = model.predict_survival_function(df)[0]
-            for horizon in self.bundle["horizons"]:
-                horizon_risks[f"{int(horizon)}-month risk"] = 1.0 - float(fn(horizon))
-        return {
-            "raw_risk": raw_risk,
-            "horizon_risks": horizon_risks,
-            "model_name": self.bundle["best_model_name"],
-        }
+        return self.bundle.predict(df)
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -413,7 +515,10 @@ def main():
     parser = argparse.ArgumentParser(description="Serve the AI clinical score calculator.")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--model-bundle", default="outputs/ai_clinical_score/best_model.joblib")
+    parser.add_argument(
+        "--model-bundle",
+        default="outputs/manuscript_survivalquilts/manuscript_survivalquilts_bundle.joblib",
+    )
     args = parser.parse_args()
 
     AppHandler.bundle_path = Path(args.model_bundle)

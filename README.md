@@ -1,6 +1,6 @@
 # AI Clinical Model for Predicting Outcomes
 
-This repository tracks the RCC AI-clinical-score project, including training code, ensemble experiments, deployment assets, and manuscript-facing documentation.
+This repository tracks the RCC AI-clinical-score codebase, including training pipelines, ensemble experiments, and deployment assets.
 
 ## Repository Scope
 
@@ -16,14 +16,12 @@ Included here:
   - lightweight AI-clinical-score calculator service
 - `deploy/`
   - `systemd`, `nginx`, and startup templates
-- selected result summaries under `outputs/`
-- project notes and the latest manuscript draft
 
 Excluded here:
 
 - raw cohort data under `AIdata/`
 - large figure binaries and local office assets
-- exploratory local folders and oversized PDFs
+- generated outputs, manuscript drafts, and exploratory local folders
 
 ## Current Ensemble Stack
 
@@ -41,25 +39,19 @@ The current manuscript ensemble supports:
 - `superpc_r`
 - `conditional_inference_survival_forest_r`
 
-The ensemble currently supports:
+The ensemble meta-learner currently supports:
 
 - `super_learner`
 - `random_search`
 
-## Key Artifacts
+## Local Runtime Outputs
 
-- unified comparison:
-  - `outputs/model_comparison/seer_model_metrics_unified.csv`
-- manuscript ensemble metrics:
-  - `outputs/manuscript_survivalquilts/manuscript_survivalquilts_metrics.csv`
-- manuscript ensemble weights:
-  - `outputs/manuscript_survivalquilts/manuscript_survivalquilts_weights.csv`
-- updated manuscript:
-  - `manuscript.20251005.sq9model.docx`
+Formal training outputs are written locally under `outputs/` and are intentionally git-ignored.
 
 ## Deployment
 
-See:
+Primary entry points:
 
-- `webapp/README.md`
-- `deploy/DEPLOY_WEBAPP.md`
+- `deploy/start_ai_clinical_score_web.sh`
+- `deploy/systemd/ai-clinical-score.service`
+- `deploy/nginx/ai-clinical-score.conf`

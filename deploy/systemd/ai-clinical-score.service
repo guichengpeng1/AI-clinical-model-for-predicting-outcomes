@@ -9,6 +9,7 @@ Group=ubuntu
 WorkingDirectory=/media/ubuntu/CosMx/rc_pc/20250824
 Environment=HOST=127.0.0.1
 Environment=PORT=8080
+Environment=MODEL_BUNDLE=/media/ubuntu/CosMx/rc_pc/20250824/outputs/manuscript_survivalquilts/manuscript_survivalquilts_bundle.joblib
 ExecStart=/media/ubuntu/CosMx/rc_pc/20250824/deploy/start_ai_clinical_score_web.sh
 Restart=always
 RestartSec=5

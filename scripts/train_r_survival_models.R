@@ -162,7 +162,16 @@ fit_superpc <- function(train_df, val_df, test_df) {
     test_harrell_cindex = NA_real_,
     threshold = best_threshold
   )
-  list(metrics = metrics, train = train_out, val = val_out, test = test_out)
+  artifact <- list(
+    kind = "superpc_r",
+    predictors = predictors,
+    horizons = horizons,
+    selected = selected,
+    pca_fit = pca_fit,
+    cox_fit = cox_fit,
+    basehaz_df = basehaz_df
+  )
+  list(metrics = metrics, train = train_out, val = val_out, test = test_out, artifact = artifact)
 }
 
 fit_cforest <- function(train_df, val_df, test_df) {
@@ -223,7 +232,13 @@ fit_cforest <- function(train_df, val_df, test_df) {
     test_harrell_cindex = NA_real_,
     threshold = NA_real_
   )
-  list(metrics = metrics, train = train_out, val = val_out, test = test_out)
+  artifact <- list(
+    kind = "conditional_inference_survival_forest_r",
+    predictors = predictors,
+    horizons = horizons,
+    cf_fit = cf_fit
+  )
+  list(metrics = metrics, train = train_out, val = val_out, test = test_out, artifact = artifact)
 }
 
 df <- read_data(input_path)
@@ -237,9 +252,11 @@ write.csv(metrics, file.path(output_dir, "r_model_metrics.csv"), row.names = FAL
 write.csv(superpc_res$train, file.path(output_dir, "superpc_train_predictions.csv"), row.names = FALSE)
 write.csv(superpc_res$val, file.path(output_dir, "superpc_val_predictions.csv"), row.names = FALSE)
 write.csv(superpc_res$test, file.path(output_dir, "superpc_test_predictions.csv"), row.names = FALSE)
+saveRDS(superpc_res$artifact, file.path(output_dir, "superpc_model.rds"))
 write.csv(cforest_res$train, file.path(output_dir, "cforest_train_predictions.csv"), row.names = FALSE)
 write.csv(cforest_res$val, file.path(output_dir, "cforest_val_predictions.csv"), row.names = FALSE)
 write.csv(cforest_res$test, file.path(output_dir, "cforest_test_predictions.csv"), row.names = FALSE)
+saveRDS(cforest_res$artifact, file.path(output_dir, "cforest_model.rds"))
 
 cat("Finished R survival models\n")
 print(metrics)
